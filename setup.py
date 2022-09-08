@@ -1,8 +1,7 @@
 from setuptools import setup
-from jhsiao.namespace import make_ns, fdir
+from jhsiao.namespace import make_ns
 
-make_ns('jhsiao', dir=fdir(__file__))
-dname = fdir(__file__, '..')
+make_ns('jhsiao')
 setup(
     name='jhsiao-tkutil',
     version='0.0.1',

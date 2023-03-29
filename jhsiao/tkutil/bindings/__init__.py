@@ -48,7 +48,7 @@ class Wrapper(object):
 
     This should be converted to str to use it as binding (with str()).
     """
-    def __init__(self, func, names=None, scope=scopes.EVENT, master=None):
+    def __init__(self, func, names=None, scope=scopes.EVENT, master=None, dobreak=False):
         """Initialize the wrapper and create corresponding tk command.
 
         func: the function to wrap.
@@ -66,9 +66,9 @@ class Wrapper(object):
         if names is None:
             names = argnames(func)
         try:
-            self.name = func.__name__ + str(id(func))
-        except Exception:
-            self.name = type(func).__name__ + str(id(func))
+            self.name = str(id(func)) + func.__name__
+        except AttributeError:
+            self.name = str(id(func)) + type(func).__name__
         master.tk.createcommand(self.name, self)
         self.func = func
         self.script = [self.name]
@@ -78,13 +78,17 @@ class Wrapper(object):
             sub, cvt = scope[k]
             self.script.append(sub)
             self.converters.append(cvt)
+        self.dobreak = dobreak
 
     def __repr__(self):
         return 'Wrapper({})'.format(self.name)
 
     def __str__(self):
         """Return the tcl script to use for binding."""
-        return ' '.join(self.script)
+        if self.dobreak:
+            return 'if {{"[{}]" == "break"}} break\n'.format(' '.join(self.script))
+        else:
+            return ' '.join(self.script) + '\n'
 
     def __call__(self, *args):
         """Call the underlying function with converted args."""
@@ -106,8 +110,8 @@ class Bindings(object):
         def __init__(self):
             self.seqs = []
             self.funcs = []
-        def bind(self, *seqs):
-            self.seqs.append(seqs)
+        def bind(self, *seqs, **kwargs):
+            self.seqs.append((seqs, kwargs))
             return self
         def __call__(self, func):
             self.funcs.append(func)
@@ -132,8 +136,10 @@ class Bindings(object):
         """Apply all the bindings to master."""
         bind = getattr(master, self.method)
         for tag, binds in self.bindings.items():
-            for seqs, func in binds:
+            for (seqs, kwargs), func in binds:
                 if not isinstance(func, str):
-                    func = str(Wrapper(func, scope=self.scope, master=master))
+                    k = dict(scope=self.scope, master=master)
+                    k.update(kwargs)
+                    func = str(Wrapper(func, **kwargs))
                 for seq in seqs:
                     bind(tag, seq, func)

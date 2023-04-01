@@ -69,7 +69,8 @@ class Wrapper(object):
             self.name = str(id(func)) + func.__name__
         except AttributeError:
             self.name = str(id(func)) + type(func).__name__
-        master.tk.createcommand(self.name, self)
+        if not master.tk.call('info', 'commands', self.name):
+            master.tk.createcommand(self.name, self)
         self.func = func
         self.script = [self.name]
         self.converters = []

@@ -13,6 +13,7 @@ tkinter subsitution even if some are not necessary.
 from __future__ import print_function
 import inspect
 import sys
+import traceback
 
 from . import scopes
 
@@ -57,6 +58,8 @@ class Wrapper(object):
         scope: scope of the binding (scopes.VALIDATION or scopes.EVENT)
         master: The master widget to use for binding.  Default to
             tk._get_default_root()
+        dobreak: bool
+            Wrap the script in a break
         """
         if master is None:
             try:
@@ -100,9 +103,10 @@ class Wrapper(object):
             except Exception as e:
                 print(e, file=sys.stderr)
             nargs.append(arg)
-        return self.func(*nargs)
-
-
+        try:
+            return self.func(*nargs)
+        except Exception:
+            traceback.print_exc()
 
 class Bindings(object):
     """Class for handling all bindings."""
@@ -133,11 +137,18 @@ class Bindings(object):
             ret = self.bindings[tag] = self.Decorator()
             return ret
 
-    def apply(self, master):
-        """Apply all the bindings to master."""
+    def apply(self, master, *tags):
+        """Apply bindings to a master widget.
+
+        master: tk widget.
+        tags: list of str
+            If given, then only apply the given tags. Otherwise, apply
+            all bindings.
+        """
         bind = getattr(master, self.method)
-        for tag, binds in self.bindings.items():
-            for (seqs, kwargs), func in binds:
+        bindings = self.bindings
+        for tag in (tags if tags else bindings):
+            for (seqs, kwargs), func in bindings[tag]:
                 if not isinstance(func, str):
                     k = dict(scope=self.scope, master=master)
                     k.update(kwargs)

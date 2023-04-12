@@ -49,59 +49,74 @@ class Wrapper(object):
 
     This should be converted to str to use it as binding (with str()).
     """
-    def __init__(self, func, names=None, scope=scopes.EVENT, master=None, dobreak=False):
+    def __init__(self, func, names=None, scope=scopes.Event, dobreak=False, **overrides):
         """Initialize the wrapper and create corresponding tk command.
 
         func: the function to wrap.
         names: The names of the function arguments.  Use `argnames` if
             omitted.
-        scope: scope of the binding (scopes.VALIDATION or scopes.EVENT)
-        master: The master widget to use for binding.  Default to
-            tk._get_default_root()
+        scope: scope of the binding (see `scopes`)
         dobreak: bool
-            Wrap the script in a break
+            Wrap the script and break if returned 'break'
+        overrides: overrides for scope.
         """
+        if names is None:
+            names = argnames(func)
+        self.argnames = names
+        try:
+            self.name = str(id(func)) + func.__name__
+        except AttributeError:
+            self.name = str(id(func)) + type(func).__name__
+        self.func = func
+        self.scope = scope(overrides=overrides)
+        self.dobreak = dobreak
+        self.converters = []
+        self.script = []
+
+    def bind(self, master=None):
+        """Bind wrapped function to a widget."""
         if master is None:
             try:
                 master = tk._get_default_root()
             except AttributeError:
                 master = tk._default_root
-        if names is None:
-            names = argnames(func)
-        try:
-            self.name = str(id(func)) + func.__name__
-        except AttributeError:
-            self.name = str(id(func)) + type(func).__name__
-        if not master.tk.call('info', 'commands', self.name):
+        self.scope.master = master.nametowidget('.')
+        if self.converters:
+            raise Exception('Wrapper should only be bound once')
+        if master.tk.call('info', 'commands', self.name):
+            print(
+                'Warning, command {} already exists'.format(self.name),
+                file=sys.stderr)
+        else:
             master.tk.createcommand(self.name, self)
-        self.func = func
-        self.script = [self.name]
-        self.converters = []
-        scope = scopes.BoundScope(master, scope)
-        for k in names:
-            sub, cvt = scope[k]
+        for k in self.argnames:
+            sub, cvt = self.scope[k]
             self.script.append(sub)
-            self.converters.append(cvt)
-        self.dobreak = dobreak
+            self.converters = [self.scope[name][1] for name in self.argnames]
 
     def __repr__(self):
         return 'Wrapper({})'.format(self.name)
 
     def __str__(self):
         """Return the tcl script to use for binding."""
+        items = [self.name]
+        items.extend([self.scope[name][0] for name in self.argnames])
         if self.dobreak:
-            return 'if {{"[{}]" == "break"}} break\n'.format(' '.join(self.script))
+            return 'if {{"[{}]" == "break"}} break\n'.format(' '.join(items))
         else:
-            return ' '.join(self.script) + '\n'
+            return ' '.join(items) + '\n'
 
     def __call__(self, *args):
         """Call the underlying function with converted args."""
+        if len(args) != len(self.converters):
+            raise ValueError(
+                'Mismatch arguments and converters for {}'.format(self.name))
         nargs = []
         for c, arg in zip(self.converters, args):
             try:
                 arg = c(arg)
-            except Exception as e:
-                print(e, file=sys.stderr)
+            except Exception:
+                traceback.print_exc()
             nargs.append(arg)
         try:
             return self.func(*nargs)
@@ -124,10 +139,9 @@ class Bindings(object):
         def __iter__(self):
             return iter(zip(self.seqs, self.funcs))
 
-    def __init__(self, method='bind_class', scope=scopes.EVENT):
+    def __init__(self, method='bind_class'):
         self.bindings = {}
         self.method = method
-        self.scope = scope
 
     def __getitem__(self, tag):
         """Return an item to be used as a decorator for bindings."""
@@ -136,6 +150,13 @@ class Bindings(object):
         except KeyError:
             ret = self.bindings[tag] = self.Decorator()
             return ret
+
+    def __call__(self, **kwargs):
+        try:
+            dec = self.bindings['']
+        except KeyError:
+            dec = self.bindings[''] = self.Decorator()
+        return dec.bind(**kwargs)
 
     def apply(self, master, *tags):
         """Apply bindings to a master widget.
@@ -148,10 +169,14 @@ class Bindings(object):
         bind = getattr(master, self.method)
         bindings = self.bindings
         for tag in (tags if tags else bindings):
-            for (seqs, kwargs), func in bindings[tag]:
-                if not isinstance(func, str):
-                    k = dict(scope=self.scope, master=master)
-                    k.update(kwargs)
-                    func = str(Wrapper(func, **kwargs))
-                for seq in seqs:
-                    bind(tag, seq, func)
+            if tag:
+                for (seqs, kwargs), func in bindings[tag]:
+                    if not isinstance(func, str):
+                        w = Wrapper(func, **kwargs)
+                        w.bind(master)
+                        func = str(w)
+                    for seq in seqs:
+                        bind(tag, seq, func)
+            else:
+                for (_, kwargs), func in bindings[tag]:
+                    Wrapper(func, **kwargs).bind(master)

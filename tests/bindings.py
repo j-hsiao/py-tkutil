@@ -42,6 +42,7 @@ def test_wrapper():
             ('widget', widget, 'event successfully fired at', x, y))
         widget.destroy()
     w = bindings.Wrapper(func)
+    w.bind(r)
     r.bind('<q>', str(w))
     r.after(1000, r.event_generate, '<q>')
     r.mainloop()
@@ -81,6 +82,28 @@ def test_bindings():
     assert(d.success)
     print('number of clicks', d.clicks)
 
+def test_script():
+    binds = bindings.Bindings()
+
+    @binds()
+    def func(widget):
+        print('got a widget:', widget)
+
+    r = tk.Tk()
+    b = tk.Button(
+        r, text='click me'
+    )
+    b.configure(command=str(bindings.Wrapper(func, widget=(str(b), None))))
+    b.grid()
+
+    @binds[str(r)].bind('<Escape>')
+    def end(widget):
+        print('Escape done')
+        widget.winfo_toplevel().destroy()
+
+    binds.apply(r)
+
+    r.mainloop()
 
 if __name__ == '__main__':
     for k, v in list(locals().items()):

@@ -86,6 +86,11 @@ class Scope(object):
         self.overrides = overrides
         self.master = master
 
+    def update(self, dct):
+        cp = self.overrides.copy()
+        cp.update(dct)
+        return type(self)(self.master, cp)
+
     def func(self, name, default):
         """Retrieve the bound func."""
         if name == 'widget' and self.master is not None:
@@ -119,17 +124,13 @@ class Trace(Scope):
     Because of this, var, index, op are REQUIRED and MUST be the last
     arguments of the function.
     """
-    @staticmethod
-    def parseidx(v):
-        return int(v) if v else -1
     subs = dict(
         widget=(None, str),
         data=(None, str),
         var=('', str),
-        index=('', parseidx),
+        index=('', str),
         op=('', str)
     )
-Trace.subs['index'] = ('', Trace.parseidx)
 
 
 class Validation(Scope):

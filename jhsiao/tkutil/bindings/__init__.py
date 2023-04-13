@@ -68,10 +68,18 @@ class Wrapper(object):
         except AttributeError:
             self.name = str(id(func)) + type(func).__name__
         self.func = func
-        self.scope = scope(overrides=overrides)
+        if isinstance(scope, scopes.Scope):
+            self.scope = scope
+        else:
+            self.scope = scope(overrides=overrides)
         self.dobreak = dobreak
         self.converters = []
-        self.script = []
+
+    def update(self, **overrides):
+        """Return new wrapper with updated scope."""
+        ret = type(self)(
+            self.func, self.argnames, self.scope.update(overrides), self.dobreak)
+        return ret
 
     def bind(self, master=None):
         """Bind wrapped function to a widget."""
@@ -91,8 +99,17 @@ class Wrapper(object):
             master.tk.createcommand(self.name, self)
         for k in self.argnames:
             sub, cvt = self.scope[k]
-            self.script.append(sub)
             self.converters = [self.scope[name][1] for name in self.argnames]
+
+    def trace(self, widget, var, mode):
+        """Compatible for py2/3.
+
+        var: the variable object to add trace to.
+        mode: 'read', 'write', 'unset'
+        """
+        widget.tk.call(
+            'trace', 'add', 'variable',
+            str(var), mode, str(self).split())
 
     def __repr__(self):
         return 'Wrapper({})'.format(self.name)
@@ -139,6 +156,11 @@ class Bindings(object):
         def __iter__(self):
             return iter(zip(self.seqs, self.funcs))
 
+    class WrapperDecorator(Decorator):
+        def __call__(self, func):
+            self.funcs.append(func)
+            return Wrapper(func, **self.seqs[-1][1])
+
     def __init__(self, method='bind_class'):
         self.bindings = {}
         self.method = method
@@ -155,7 +177,7 @@ class Bindings(object):
         try:
             dec = self.bindings['']
         except KeyError:
-            dec = self.bindings[''] = self.Decorator()
+            dec = self.bindings[''] = self.WrapperDecorator()
         return dec.bind(**kwargs)
 
     def apply(self, master, *tags):

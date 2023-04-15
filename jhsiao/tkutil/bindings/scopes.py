@@ -153,7 +153,8 @@ class Validation(Scope):
         change=('%S', str), # the change (added or deleted char if any)
         valstate=('%v', str), # widget.cget('validate')
         valtype=('%V', str), # the validation trigger
-        widget=('%W', str)
+        widget=('%W', str),
+        data=(None, str),
     )
 
 class Event(Scope):

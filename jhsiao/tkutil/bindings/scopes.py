@@ -99,7 +99,7 @@ class Scope(object):
 
     def __getitem__(self, k):
         sub, func = self.overrides.get(k, (None, None))
-        osub, ofunc = self.subs[k]
+        osub, ofunc = self.subs.get(k, (None, None))
         if sub is None:
             sub = osub
         else:

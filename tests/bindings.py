@@ -77,7 +77,10 @@ def test_bindings():
             widget.nametowidget('.').clicks += 1
 
     d = Dummy()
-    d.after(5000, d.event_generate, '<q>')
+    # It seems event_generate does not do anything
+    # if the tk app does not have focus.
+    d.after(3000, d.event_generate, '<q>')
+    d.after(50000, d.stop)
     d.mainloop()
     assert(d.success)
     print('number of clicks', d.clicks)
@@ -85,7 +88,7 @@ def test_bindings():
 def test_script():
     binds = bindings.Bindings()
 
-    @binds()
+    @binds('')
     def func(widget):
         print('got a widget:', widget)
 
@@ -93,7 +96,7 @@ def test_script():
     b = tk.Button(
         r, text='click me'
     )
-    b.configure(command=str(bindings.Wrapper(func, widget=(str(b), None))))
+    b.configure(command=str(func.update(widget=(str(b), None))))
     b.grid()
 
     @binds[str(r)].bind('<Escape>')

@@ -14,6 +14,8 @@ from __future__ import print_function
 import inspect
 import sys
 import traceback
+from collections import defaultdict
+from functools import partial
 
 from . import scopes
 
@@ -155,32 +157,47 @@ class Bindings(object):
             return func
         def __iter__(self):
             return iter(zip(self.seqs, self.funcs))
+        def __repr__(self):
+            return repr(list(zip(self.funcs, self.seqs)))
 
     class WrapperDecorator(Decorator):
         def __call__(self, func):
             self.funcs.append(func)
             return Wrapper(func, **self.seqs[-1][1])
 
-    def __init__(self, method='bind_class'):
-        self.bindings = {}
-        self.method = method
+    def __init__(self):
+        self.bindings = defaultdict(partial(defaultdict, self.Decorator))
+        self.bindings[''] = self.WrapperDecorator()
 
     def __getitem__(self, tag):
-        """Return an item to be used as a decorator for bindings."""
-        try:
-            return self.bindings[tag]
-        except KeyError:
-            ret = self.bindings[tag] = self.Decorator()
-            return ret
+        """Return self('bind_class') or self('') if tag is None"""
+        if tag:
+            return self.bindings['bind_class'][tag]
+        else:
+            return self.bindings[''].bind()
 
-    def __call__(self, **kwargs):
-        try:
-            dec = self.bindings['']
-        except KeyError:
-            dec = self.bindings[''] = self.WrapperDecorator()
-        return dec.bind(**kwargs)
+    def __call__(self, *args, **kwargs):
+        """Return a dict or WrapperDecorator.
 
-    def apply(self, master, *tags):
+        Positional args:
+        method: The method to use.  It defaults to 'tag_bind'.
+            If empty, returns a WrapperDecorator.bind(**kwargs).  Use
+            this as a decorator for a function that needs to have a
+            command created, but not bound.  These are used to generate
+            scripts for validation or a button command, etc.  Otherwise
+            return a dict for the given method.  Index it with the
+            desired tag to obtain a Decorator for that specific tag.
+        """
+        if args:
+            method = args[0]
+        else:
+            method = 'tag_bind'
+        if method:
+            return self.bindings[method]
+        else:
+            return self.bindings[''].bind(**kwargs)
+
+    def apply(self, master, tags=None, methods=None, create=True):
         """Apply bindings to a master widget.
 
         master: tk widget.
@@ -188,17 +205,21 @@ class Bindings(object):
             If given, then only apply the given tags. Otherwise, apply
             all bindings.
         """
-        bind = getattr(master, self.method)
         bindings = self.bindings
-        for tag in (tags if tags else bindings):
-            if tag:
-                for (seqs, kwargs), func in bindings[tag]:
-                    if not isinstance(func, str):
-                        w = Wrapper(func, **kwargs)
-                        w.bind(master)
-                        func = str(w)
-                    for seq in seqs:
-                        bind(tag, seq, func)
+        for method in (methods if methods else bindings):
+            if method:
+                bind = getattr(master, method, None)
+                info = bindings[method]
+                for tag in (tags if tags else info):
+                    for (keyseqs, kwargs), func in info[tag]:
+                        if not isinstance(func, str):
+                            w = Wrapper(func, **kwargs)
+                            if create:
+                                w.bind(master)
+                            func = str(w)
+                        if bind is not None:
+                            for seq in keyseqs:
+                                bind(tag, seq, func)
             else:
-                for (_, kwargs), func in bindings[tag]:
+                for (_, kwargs), func in bindings[method]:
                     Wrapper(func, **kwargs).bind(master)

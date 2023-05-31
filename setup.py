@@ -8,5 +8,5 @@ setup(
     author='Jason Hsiao',
     author_email='oaishnosaj@gmail.com',
     description='tkinter helpers',
-    packages=['jhsiao.tkutil.bindings'],
+    packages=['jhsiao.tkutil', 'jhsiao.tkutil.bindings'],
 )

@@ -86,15 +86,38 @@ class Scope(object):
         self.overrides = overrides
         self.master = master
 
-    def update(self, dct):
+    def update(self, overrides):
+        """Return new scope with updated overrides.
+
+        If the value is not a tuple, replace it with (value, None).
+        """
+        for k, v in overrides.items():
+            if not isinstance(v, tuple):
+                overrides[k] = (v, None)
         cp = self.overrides.copy()
-        cp.update(dct)
+        cp.update(overrides)
         return type(self)(self.master, cp)
 
-    def func(self, name, default):
-        """Retrieve the bound func."""
-        if name == 'widget' and self.master is not None:
-            return self.master.nametowidget
+    def func(self, name, func, default):
+        """Retrieve the bound func.
+
+        name: name of argument.
+        func: overridden func.
+        default: the default function.
+
+        Prioritize the func value.  If a str, then if func is:
+            'widget': nametowidget
+            any other str: self.master.<func>
+        Otherwise, use the default func() for name:
+            'widget': nametowidget
+        """
+        if self.master is not None:
+            if isinstance(func, str):
+                if func == 'widget':
+                    return self.master.nametowidget
+                return getattr(self.master, func)
+            elif name == 'widget':
+                return self.master.nametowidget
         return default
 
     def __getitem__(self, k):
@@ -104,8 +127,8 @@ class Scope(object):
             sub = osub
         else:
             sub = str(sub)
-        if func is None:
-            func = self.func(k, ofunc)
+        if not callable(func):
+            func = self.func(k, func, ofunc)
         return sub, func
 
 class Trace(Scope):

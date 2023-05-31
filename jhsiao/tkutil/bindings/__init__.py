@@ -77,14 +77,22 @@ class Wrapper(object):
         self.dobreak = dobreak
         self.converters = []
 
+    def str(self, **overrides):
+        """Update and return str script."""
+        return str(self.update(**overrides))
+
     def update(self, **overrides):
         """Return new wrapper with updated scope."""
         ret = type(self)(
-            self.func, self.argnames, self.scope.update(overrides), self.dobreak)
+            self.func, self.argnames,
+            self.scope.update(overrides), self.dobreak)
         return ret
 
     def bind(self, master=None):
-        """Bind wrapped function to a widget."""
+        """Bind wrapped function to a widget.
+
+        Set master widget.  Create the command.  Calculate converters.
+        """
         if master is None:
             try:
                 master = tk._get_default_root()

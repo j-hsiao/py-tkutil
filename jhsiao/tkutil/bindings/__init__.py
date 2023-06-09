@@ -151,7 +151,18 @@ class Wrapper(object):
             traceback.print_exc()
 
 class Bindings(object):
-    """Class for handling all bindings."""
+    """Class for handling all bindings.
+
+    Bindings have 2 levels of keys: method and tag.
+    Iterating yields (seq, kwargs), func.  seq is a sequence of bind
+    tags such as '<Button-1>' to bind the func to.  The kwargs is a
+    dict for Wrapper instantiation.
+
+    Bindings under the empty method ('') are exceptions and indicate
+    functions that shouldn't be bound by tag, but rather are to be
+    used as scripts such as for a `tk.Button`'s command argument or
+    various widgets' validation commands.
+    """
     class Decorator(object):
         """Hold bindings meant for a single tag."""
         def __init__(self):
@@ -169,6 +180,7 @@ class Bindings(object):
             return repr(list(zip(self.funcs, self.seqs)))
 
     class WrapperDecorator(Decorator):
+        """Return wrapper for script generation."""
         def __call__(self, func):
             self.funcs.append(func)
             return Wrapper(func, **self.seqs[-1][1])
@@ -178,30 +190,91 @@ class Bindings(object):
         self.bindings[''] = self.WrapperDecorator()
 
     def __getitem__(self, tag):
-        """Return self('bind_class') or self('') if tag is None"""
+        """Return corresponding decorator.
+
+        tag:
+            str: The tag to use. method defaults to bind_class.
+            tuple: pair of method, tag strs.  If method is '', it is
+                replaced with tag_bind.
+        If the tag is empty, then assume method is empty too.
+        """
         if tag:
-            return self.bindings['bind_class'][tag]
+            if isinstance(tag, str):
+                method = 'bind_class'
+            elif isinstance(tag, tuple):
+                method, tag = tag
+            else:
+                raise KeyError(repr(tag))
+            if not method:
+                method = 'tag_bind'
+            return self.bindings[method][tag]
         else:
-            return self.bindings[''].bind()
+            return self.bindings['']
 
     def __call__(self, *args, **kwargs):
         """Return a dict or WrapperDecorator.
 
         Positional args:
-        method: The method to use.  It defaults to 'tag_bind'.
-            If empty, returns a WrapperDecorator.bind(**kwargs).  Use
-            this as a decorator for a function that needs to have a
-            command created, but not bound.  These are used to generate
-            scripts for validation or a button command, etc.  Otherwise
-            return a dict for the given method.  Index it with the
-            desired tag to obtain a Decorator for that specific tag.
+            Sequence of method, tag, and binding sequences.
+            If method is empty, it will be replaced with 'tag_bind'.
+            If method is omitted, it will be defaulted to 'bind_class'.
+            A tag should always be given for methods intended to be
+            bound. If method and tag are both omitted, then a
+            WrapperDecorator is returned for creating Wrappers.
+            The binding sequences are sequences of strings beginning
+            with '<' and ending in '>'.  These indicate the events
+            to bind to.  If given, then they will be given to
+            the Decorator.bind() method and the result is returned.
+            Otherwise, the Decorator itself is returned.
+        kwargs:
+            These are keyword arguments for Wrapper instantiation.
+
+        Summary:
+            'method', 'tag', '<bindings>'...:
+                Return decorator.bind(<bindings>..., **kwargs).  If
+                method is '', then method is replaced with 'tag_bind'.
+            'tag', '<binding>'...:
+                Same as above, but method='bind_class'.
+            'method', 'tag':
+                Return the decorator.  Again, if method == '', then
+                'tag_bind' will be used.
+                eg.
+                dec = bindings_instance('method', 'tag')
+                @dec.bind(...)
+                def func1(...):
+                    ...
+                @dec.bind(...)
+                def func2(...):
+                    ...
+            'tag':
+                Same as above, but method defaults to 'bind_class'.
+            :
+                No args returns a WrapperDecorator primed with the
+                kwargs ready for creating a Wrapper.
         """
         if args:
-            method = args[0]
-        else:
-            method = 'tag_bind'
-        if method:
-            return self.bindings[method]
+            for i, item in enumerate(args):
+                if item.startswith('<'):
+                    bindseqs = args[i:]
+                    methodtag = args[:i]
+                    break
+            else:
+                bindseqs = ()
+                methodtag = args
+            if len(methodtag) == 1:
+                method = 'bind_class'
+                tag = methodtag[0]
+            elif len(methodtag) == 2:
+                method, tag = methodtag
+            else:
+                raise ValueError('Invalid arguments')
+            if not method:
+                method = 'tag_bind'
+            ret = self.bindings[method][tag]
+            if bindseqs:
+                return ret.bind(*bindseqs, **kwargs)
+            else:
+                return ret
         else:
             return self.bindings[''].bind(**kwargs)
 

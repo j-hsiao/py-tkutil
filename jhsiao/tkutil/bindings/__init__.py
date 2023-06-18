@@ -58,6 +58,8 @@ class Wrapper(object):
         names: The names of the function arguments.  Use `argnames` if
             omitted.
         scope: scope of the binding (see `scopes`)
+            This can be either the class of the scope or an instance.
+            If the class, then overrides will be used to instantiate it.
         dobreak: bool
             Wrap the script and break if returned 'break'
         overrides: overrides for scope.
@@ -107,9 +109,7 @@ class Wrapper(object):
                 file=sys.stderr)
         else:
             master.tk.createcommand(self.name, self)
-        for k in self.argnames:
-            sub, cvt = self.scope[k]
-            self.converters = [self.scope[name][1] for name in self.argnames]
+        self.converters = [self.scope[name][1] for name in self.argnames]
 
     def trace(self, widget, var, mode):
         """Compatible for py2/3.
